@@ -1,0 +1,168 @@
+@import "tailwindcss";
+@import "leaflet/dist/leaflet.css";
+
+/*
+  DES — London lettings.
+  A property portal is a tool, not a brochure: dense, scannable, trustworthy.
+  Ink navy over a cool near-white, with a single confident blue for actions and
+  a warm amber reserved for "new" and availability. Distinct from the editorial
+  and studio palettes used elsewhere.
+*/
+
+:root {
+  --surface: #f7f8fa;
+  --surface-2: #eceef2;
+  --card: #ffffff;
+  --ink: #10192b;
+  --ink-2: #3c4759;
+  --muted: #6b7688;
+  --line: #dde1e8;
+  --line-strong: #c3cad6;
+  --brand: #1f4ed8;
+  --brand-dark: #1a41b4;
+  --amber: #b45309;
+  --danger: #b42318;
+  --radius: 8px;
+}
+
+@theme inline {
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-brand: var(--brand);
+  --color-amber: var(--amber);
+  --color-danger: var(--danger);
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Components --------------------------------------------------------------- */
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius);
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0.65rem 1.15rem;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+.btn-primary {
+  background: var(--brand);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--brand-dark);
+}
+.btn-primary:disabled {
+  background: var(--line-strong);
+  cursor: not-allowed;
+}
+.btn-quiet {
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+}
+.btn-quiet:hover {
+  background: var(--surface-2);
+}
+
+.field {
+  width: 100%;
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.9rem;
+  color: var(--ink);
+  transition: border-color 180ms ease;
+}
+.field:focus {
+  border-color: var(--brand);
+  outline: none;
+}
+
+.chip {
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  border-radius: 999px;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.8rem;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.chip:hover {
+  border-color: var(--brand);
+}
+.chip[aria-pressed="true"] {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+}
+
+/* Map ---------------------------------------------------------------------- */
+
+/* Price pins read at a glance; a generic teardrop tells you nothing until
+   you click it. */
+.map-pin {
+  display: inline-block;
+  transform: translate(-50%, -50%);
+  background: var(--card);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--ink);
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgb(16 25 43 / 0.18);
+}
+.map-pin-active {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: #fff;
+  z-index: 500;
+}
+
+/* Leaflet renders its own attribution; keep it legible but quiet. */
+.leaflet-container {
+  font-family: inherit;
+  background: var(--surface-2);
+}
+.leaflet-control-attribution {
+  font-size: 10px;
+  background: rgb(255 255 255 / 0.85);
+}
