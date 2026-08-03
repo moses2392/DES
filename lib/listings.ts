@@ -11,12 +11,30 @@ import type { Listing } from "@/lib/search";
  * project would be dangerous if it leaked.
  */
 
+/**
+ * Whether the database is configured at all.
+ *
+ * Checked before querying so a missing environment variable produces a page
+ * that explains itself, rather than an unhandled throw that the host renders
+ * as a bare "a server error occurred" — which tells whoever deployed it
+ * nothing about what to fix.
+ */
+export function isConfigured(): boolean {
+  return Boolean(
+    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim()
+  );
+}
+
 function client() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   if (!url || !key) {
     throw new Error("Missing Supabase configuration. Copy .env.example to .env.local.");
   }
+  // Trimmed because values pasted into a hosting dashboard routinely carry a
+  // trailing newline, which makes the request fail in a way that looks like
+  // a bad key rather than a bad paste.
   return createClient(url.trim(), key.trim(), { auth: { persistSession: false } });
 }
 

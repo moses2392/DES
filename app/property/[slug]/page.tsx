@@ -2,7 +2,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getListing } from "@/lib/listings";
+import { getListing, isConfigured } from "@/lib/listings";
+import { SetupNotice } from "@/components/setup-notice";
 import { describeBedrooms, formatRent } from "@/lib/search";
 import { EnquiryForm } from "@/components/enquiry-form";
 
@@ -14,6 +15,10 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
+  // Runs before the page and would otherwise throw first, turning a missing
+  // setting back into an unexplained server error.
+  if (!isConfigured()) return { title: "Setup required" };
+
   const listing = await getListing(slug);
   if (!listing) return { title: "Property not found" };
   return {
@@ -25,6 +30,8 @@ export async function generateMetadata({
 
 export default async function PropertyPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
+  if (!isConfigured()) return <SetupNotice />;
+
   const listing = await getListing(slug);
   if (!listing) notFound();
 
