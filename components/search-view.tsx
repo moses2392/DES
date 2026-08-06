@@ -1,8 +1,8 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import dynamic from "next/dynamic";
-import Image from "next/image";
+import { SafeImage } from "@/components/safe-image";
 import Link from "next/link";
 import {
   describeBedrooms,
@@ -185,15 +185,12 @@ export function SearchView({ listings }: { listings: Listing[] }) {
                     className="card group block overflow-hidden transition-shadow hover:shadow-md"
                   >
                     <div className="relative aspect-[4/3] bg-surface-2">
-                      {l.images[0] && (
-                        <Image
-                          src={l.images[0]}
-                          alt={l.title}
-                          fill
-                          sizes="(max-width: 640px) 100vw, 25vw"
-                          className="object-cover"
-                        />
-                      )}
+                      <SafeImage
+                        src={l.images[0]}
+                        alt={l.title}
+                        sizes="(max-width: 640px) 100vw, 25vw"
+                        className="object-cover"
+                      />
                       <span className="absolute left-3 top-3 rounded bg-card/95 px-2 py-1 text-xs font-semibold">
                         {formatRent(l.rentPcm)} pcm
                       </span>

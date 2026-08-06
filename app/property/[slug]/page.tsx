@@ -1,4 +1,4 @@
-import Image from "next/image";
+import { SafeImage } from "@/components/safe-image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -55,24 +55,20 @@ export default async function PropertyPage({ params }: { params: Promise<{ slug:
       {/* Gallery: one lead image with the rest beside it, as portals set it. */}
       <div className="mb-8 grid gap-2 md:grid-cols-3">
         <div className="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-2 md:col-span-2 md:aspect-[16/10]">
-          {listing.images[0] && (
-            <Image
-              src={listing.images[0]}
-              alt={listing.title}
-              fill
-              priority
-              sizes="(max-width: 768px) 100vw, 66vw"
-              className="object-cover"
-            />
-          )}
+          <SafeImage
+            src={listing.images[0]}
+            alt={listing.title}
+            priority
+            sizes="(max-width: 768px) 100vw, 66vw"
+            className="object-cover"
+          />
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-1">
           {listing.images.slice(1, 3).map((src, i) => (
             <div key={src} className="relative aspect-[4/3] overflow-hidden rounded-lg bg-surface-2">
-              <Image
+              <SafeImage
                 src={src}
                 alt={`${listing.title}, view ${i + 2}`}
-                fill
                 sizes="(max-width: 768px) 50vw, 33vw"
                 className="object-cover"
               />
