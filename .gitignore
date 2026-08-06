@@ -43,3 +43,7 @@ next-env.d.ts
 
 .vercel
 .env*
+
+# local scratch
+_*.log
+_*.mjs
