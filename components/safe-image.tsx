@@ -1,4 +1,5 @@
 import Image from "next/image";
+import { isOptimisable } from "@/lib/image-hosts";
 
 /**
  * next/image throws when a remote host is not listed in next.config's
@@ -9,19 +10,10 @@ import Image from "next/image";
  * a landlord happens to paste, so an unexpected host is a matter of time rather
  * than a hypothetical. Anything outside the allowlist falls back to a neutral
  * panel, and the page still renders.
+ *
+ * The allowlist lives in lib/image-hosts.ts because next.config.ts needs the
+ * same answer, and two copies of it would eventually disagree.
  */
-
-const ALLOWED_HOSTS = new Set(["images.unsplash.com"]);
-
-function isOptimisable(src: string): boolean {
-  try {
-    return ALLOWED_HOSTS.has(new URL(src).hostname);
-  } catch {
-    // Not a parseable absolute URL — a relative path or plain nonsense.
-    return false;
-  }
-}
-
 export function SafeImage({
   src,
   alt,
@@ -35,7 +27,7 @@ export function SafeImage({
   priority?: boolean;
   className?: string;
 }) {
-  if (!src || !isOptimisable(src)) {
+  if (!isOptimisable(src)) {
     return (
       <div
         aria-hidden={alt === "" ? true : undefined}
@@ -49,6 +41,6 @@ export function SafeImage({
   }
 
   return (
-    <Image src={src} alt={alt} fill priority={priority} sizes={sizes} className={className} />
+    <Image src={src!} alt={alt} fill priority={priority} sizes={sizes} className={className} />
   );
 }

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import Link from "next/link";
 import "./globals.css";
 
 const inter = Inter({ variable: "--font-inter", subsets: ["latin"], display: "swap" });
@@ -14,6 +13,14 @@ export const metadata: Metadata = {
     "Long-term lettings across London. Search by area, price and bedrooms on a live map, and enquire directly with the landlord.",
 };
 
+/**
+ * The document shell, and nothing else.
+ *
+ * The public site's header and footer live in `app/(public)/layout.tsx`, so the
+ * back office can have its own chrome without either one inheriting the
+ * other's. Route groups do not appear in URLs — every public path is exactly
+ * where it was.
+ */
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en" className={`${inter.variable} h-full`}>
@@ -24,33 +31,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         >
           Skip to content
         </a>
-
-        <header className="border-b border-line bg-card">
-          <div className="mx-auto flex h-14 max-w-[1600px] items-center justify-between px-4 md:px-6">
-            <Link href="/" className="text-lg font-bold tracking-tight">
-              DES<span className="text-brand">.</span>
-            </Link>
-            <nav className="flex items-center gap-5 text-sm" aria-label="Main">
-              <Link href="/" className="text-ink-2 hover:text-brand">
-                Search
-              </Link>
-              <Link href="/about" className="text-ink-2 hover:text-brand">
-                About
-              </Link>
-            </nav>
-          </div>
-        </header>
-
-        <main id="main" className="flex-1">
-          {children}
-        </main>
-
-        <footer className="border-t border-line bg-card">
-          <div className="mx-auto flex max-w-[1600px] flex-col justify-between gap-2 px-4 py-6 text-sm text-muted md:flex-row md:px-6">
-            <p>© {new Date().getFullYear()} DES Lettings, London</p>
-            <p>Map data © OpenStreetMap contributors</p>
-          </div>
-        </footer>
+        {children}
       </body>
     </html>
   );

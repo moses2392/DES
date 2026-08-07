@@ -1,0 +1,310 @@
+-- ============================================================================
+-- DES — staff accounts and the back office.
+--
+-- Paste this whole file into Supabase → SQL Editor → New query → Run.
+-- Safe to run more than once: every statement is guarded.
+--
+-- The public site's design is preserved exactly: it still needs only the
+-- publishable key, and there is still no secret key in the application. Staff
+-- powers come from being *signed in*, not from a privileged key — every admin
+-- write below is authorised by a policy that asks who you are, so the same
+-- publishable key that a visitor's browser holds cannot do any of it.
+-- ============================================================================
+
+-- -------------------------------------------------------------------- staff
+-- Who may use the back office. A row here is what makes an auth account a
+-- member of staff; an auth account with no row is a stranger who happens to
+-- have signed in, and every policy below will refuse them.
+create table if not exists public.staff (
+  id uuid primary key default gen_random_uuid(),
+  -- References Supabase's auth schema. Null until an invited person first
+  -- signs in and the row is claimed by email.
+  user_id uuid unique,
+  email text not null unique,
+  full_name text not null default '',
+  role text not null default 'agent' check (role in ('owner', 'agent')),
+  -- Kept rather than deleted when someone leaves, so the trail of who did what
+  -- to which enquiry does not develop holes.
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_staff_user on public.staff (user_id);
+
+-- ------------------------------------------------------------ enquiry status
+-- The pipeline gains a step. The original constraint allowed new/contacted/
+-- closed; a viewing being booked is the event Moses actually cares about and
+-- was previously indistinguishable from a phone call.
+alter table public.enquiries drop constraint if exists enquiries_status_check;
+alter table public.enquiries add constraint enquiries_status_check
+  check (status in ('new', 'contacted', 'viewing_booked', 'closed'));
+
+alter table public.enquiries
+  add column if not exists assigned_to uuid references public.staff (id) on delete set null;
+alter table public.enquiries
+  add column if not exists viewing_at timestamptz;
+alter table public.enquiries
+  add column if not exists updated_at timestamptz not null default now();
+
+create index if not exists idx_enquiries_status on public.enquiries (status, created_at desc);
+
+-- ------------------------------------------------------------ enquiry notes
+-- What happened, in order. Append-only by design: a pipeline whose history can
+-- be edited afterwards cannot settle an argument about who promised what.
+create table if not exists public.enquiry_notes (
+  id uuid primary key default gen_random_uuid(),
+  enquiry_id uuid not null references public.enquiries (id) on delete cascade,
+  author_id uuid references public.staff (id) on delete set null,
+  -- Free text, or the automatic record of a status change.
+  body text not null check (length(body) between 1 and 4000),
+  kind text not null default 'note' check (kind in ('note', 'status')),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_enquiry_notes_enquiry
+  on public.enquiry_notes (enquiry_id, created_at);
+
+-- ============================================================================
+-- Who is who.
+--
+-- SECURITY DEFINER so these can read `staff` without recursing through that
+-- table's own policy, which would deadlock every policy that depends on it.
+-- ============================================================================
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.staff s
+    where s.user_id = auth.uid() and s.active
+  );
+$$;
+
+create or replace function public.is_owner()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.staff s
+    where s.user_id = auth.uid() and s.active and s.role = 'owner'
+  );
+$$;
+
+-- The signed-in person's staff row id, for stamping authorship.
+create or replace function public.current_staff_id()
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select s.id from public.staff s where s.user_id = auth.uid() and s.active;
+$$;
+
+-- ----------------------------------------------------------------------------
+-- Claiming an invitation.
+--
+-- An owner invites someone by email before that person has an account, so the
+-- row's user_id is null. That person cannot link it themselves through a
+-- policy: until the link exists is_staff() is false, so they are not staff, so
+-- no staff policy applies to them. It is a genuine chicken and egg, and this
+-- function is the way out of it.
+--
+-- SECURITY DEFINER, but narrow on purpose. It can only ever attach the caller's
+-- own auth id to a row whose email already matches their *verified* address, and
+-- only while that row is unclaimed. It cannot re-point a claimed row, cannot
+-- touch a row belonging to anyone else, and grants no role — the invitation
+-- decided the role before this ran.
+-- ----------------------------------------------------------------------------
+create or replace function public.claim_staff_row()
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  caller_email text;
+begin
+  select u.email into caller_email from auth.users u where u.id = auth.uid();
+  if caller_email is null then
+    return;
+  end if;
+
+  update public.staff
+     set user_id = auth.uid()
+   where lower(email) = lower(caller_email)
+     and user_id is null;
+end;
+$$;
+
+revoke all on function public.claim_staff_row() from public, anon;
+grant execute on function public.claim_staff_row() to authenticated;
+
+-- ============================================================================
+-- Policies.
+--
+-- The public site's two original policies are untouched: listings are readable
+-- by anyone where published, and anyone may insert an enquiry. Everything added
+-- here is gated on is_staff() or is_owner().
+-- ============================================================================
+
+alter table public.staff enable row level security;
+alter table public.enquiry_notes enable row level security;
+
+do $$
+begin
+  -- ---------------------------------------------------------------- staff
+  -- Staff can see the team. Only an owner may change it — an agent who could
+  -- promote themselves to owner is not a role system.
+  if not exists (select 1 from pg_policies where policyname = 'staff_read') then
+    create policy "staff_read" on public.staff
+      for select to authenticated using (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'staff_write_owner') then
+    create policy "staff_write_owner" on public.staff
+      for all to authenticated
+      using (public.is_owner()) with check (public.is_owner());
+  end if;
+
+  -- ------------------------------------------------------------- listings
+  -- Staff may read everything including unpublished drafts; the public policy
+  -- still only exposes published rows.
+  if not exists (select 1 from pg_policies where policyname = 'listings_staff_read_all') then
+    create policy "listings_staff_read_all" on public.listings
+      for select to authenticated using (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'listings_staff_insert') then
+    create policy "listings_staff_insert" on public.listings
+      for insert to authenticated with check (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'listings_staff_update') then
+    create policy "listings_staff_update" on public.listings
+      for update to authenticated
+      using (public.is_staff()) with check (public.is_staff());
+  end if;
+
+  -- Deleting a listing cascades its enquiries, which is a real loss. Owners
+  -- only; agents unpublish instead.
+  if not exists (select 1 from pg_policies where policyname = 'listings_owner_delete') then
+    create policy "listings_owner_delete" on public.listings
+      for delete to authenticated using (public.is_owner());
+  end if;
+
+  -- ------------------------------------------------------------ enquiries
+  -- The original schema gave enquiries no SELECT policy at all, so nobody could
+  -- read them. This is the "future authenticated staff area" that note
+  -- anticipated — and it is still nobody, unless you are staff.
+  if not exists (select 1 from pg_policies where policyname = 'enquiries_staff_read') then
+    create policy "enquiries_staff_read" on public.enquiries
+      for select to authenticated using (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'enquiries_staff_update') then
+    create policy "enquiries_staff_update" on public.enquiries
+      for update to authenticated
+      using (public.is_staff()) with check (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'enquiries_owner_delete') then
+    create policy "enquiries_owner_delete" on public.enquiries
+      for delete to authenticated using (public.is_owner());
+  end if;
+
+  -- --------------------------------------------------------- enquiry notes
+  -- Insert and read only. No UPDATE or DELETE policy anywhere, which is what
+  -- makes the trail append-only rather than merely conventionally append-only.
+  if not exists (select 1 from pg_policies where policyname = 'enquiry_notes_staff_read') then
+    create policy "enquiry_notes_staff_read" on public.enquiry_notes
+      for select to authenticated using (public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'enquiry_notes_staff_insert') then
+    create policy "enquiry_notes_staff_insert" on public.enquiry_notes
+      for insert to authenticated
+      -- The author must be the person writing it. Without the second clause a
+      -- member of staff could file a note under a colleague's name.
+      with check (public.is_staff() and author_id = public.current_staff_id());
+  end if;
+end $$;
+
+-- ============================================================================
+-- Photographs.
+--
+-- A public bucket: the images are shown on a public website, so hiding them
+-- would achieve nothing. Uploading and deleting is staff-only.
+-- ============================================================================
+
+insert into storage.buckets (id, name, public)
+values ('listing-photos', 'listing-photos', true)
+on conflict (id) do nothing;
+
+do $$
+begin
+  if not exists (select 1 from pg_policies where policyname = 'listing_photos_public_read') then
+    create policy "listing_photos_public_read" on storage.objects
+      for select to anon, authenticated using (bucket_id = 'listing-photos');
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'listing_photos_staff_write') then
+    create policy "listing_photos_staff_write" on storage.objects
+      for insert to authenticated
+      with check (bucket_id = 'listing-photos' and public.is_staff());
+  end if;
+
+  if not exists (select 1 from pg_policies where policyname = 'listing_photos_staff_delete') then
+    create policy "listing_photos_staff_delete" on storage.objects
+      for delete to authenticated
+      using (bucket_id = 'listing-photos' and public.is_staff());
+  end if;
+end $$;
+
+-- ============================================================================
+-- Keeping updated_at honest.
+-- ============================================================================
+
+create or replace function public.touch_enquiry_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_enquiries_updated_at on public.enquiries;
+create trigger trg_enquiries_updated_at
+  before update on public.enquiries
+  for each row execute function public.touch_enquiry_updated_at();
+
+-- ============================================================================
+-- Bootstrapping the first owner.
+--
+-- There is a chicken and egg here: only an owner may create staff, and there
+-- is no owner yet. So the first one is created by hand, once.
+--
+--   1. Supabase → Authentication → Users → Add user. Use Moses's real email
+--      and tick "Auto Confirm User".
+--   2. Run the statement below with that same email.
+--
+-- After that, everyone else is invited from inside the app.
+-- ============================================================================
+
+-- Edit the email, uncomment, and run once:
+--
+-- insert into public.staff (user_id, email, full_name, role)
+-- select u.id, u.email, 'Moses', 'owner'
+--   from auth.users u
+--  where u.email = 'moses@example.com'
+-- on conflict (email) do update
+--    set user_id = excluded.user_id, role = 'owner', active = true;
