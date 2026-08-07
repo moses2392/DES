@@ -227,6 +227,24 @@ export async function addNote(_prev: FormState, formData: FormData): Promise<For
   return { error: null, ok: true };
 }
 
+export async function deleteEnquiry(formData: FormData) {
+  // Owners only, in the database as well as here. Deleting an enquiry destroys
+  // its whole note trail, which is the one record of what was promised to
+  // somebody — so it is not an agent's call, and closing is the usual answer.
+  const staff = await requireStaff();
+  const id = String(formData.get("id") ?? "");
+
+  if (staff.role !== "owner") redirect(`/admin/enquiries/${id}?error=not-allowed`);
+
+  const supabase = await sessionClient();
+  const { error } = await supabase.from("enquiries").delete().eq("id", id);
+  if (error) redirect(`/admin/enquiries/${id}?error=delete-failed`);
+
+  revalidatePath("/admin/enquiries");
+  revalidatePath("/admin");
+  redirect("/admin/enquiries?deleted=1");
+}
+
 /* -------------------------------------------------------------------------- */
 /*                                    team                                    */
 /* -------------------------------------------------------------------------- */

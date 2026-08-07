@@ -2,19 +2,33 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { EnquiryWorkspace } from "@/components/admin/enquiry-workspace";
 import { StatusBadge, when } from "@/components/admin/bits";
+import { DeleteEnquiry } from "@/components/admin/delete-enquiry";
 import { adminEnquiry, enquiryNotes, team } from "@/lib/admin-data";
+import { currentStaff } from "@/lib/supabase-server";
 
 export const metadata = { title: "Enquiry" };
 
-export default async function EnquiryPage({ params }: PageProps<"/admin/enquiries/[id]">) {
+const ERRORS: Record<string, string> = {
+  "not-allowed": "Only an owner can delete an enquiry.",
+  "delete-failed": "That enquiry could not be deleted.",
+};
+
+export default async function EnquiryPage({ params, searchParams }: PageProps<"/admin/enquiries/[id]">) {
   const { id } = await params;
+  const query = await searchParams;
 
   const enquiry = await adminEnquiry(id);
   // Null covers both "no such enquiry" and "not allowed to see it", which is
   // the right thing to tell someone guessing ids.
   if (!enquiry) notFound();
 
-  const [notes, staffList] = await Promise.all([enquiryNotes(id), team()]);
+  const [notes, staffList, staff] = await Promise.all([
+    enquiryNotes(id),
+    team(),
+    currentStaff(),
+  ]);
+
+  const error = typeof query.error === "string" ? ERRORS[query.error] : null;
 
   return (
     <div className="space-y-6">
@@ -28,6 +42,15 @@ export default async function EnquiryPage({ params }: PageProps<"/admin/enquirie
         </div>
         <p className="mt-1 text-sm text-muted">Received {when(enquiry.createdAt, true)}</p>
       </div>
+
+      {error && (
+        <p
+          role="alert"
+          className="rounded-[--radius] border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger"
+        >
+          {error}
+        </p>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
         <div className="space-y-6">
@@ -95,6 +118,12 @@ export default async function EnquiryPage({ params }: PageProps<"/admin/enquirie
               </Link>
             )}
           </section>
+
+          {staff?.role === "owner" && (
+            <section className="card border-danger/30 p-5">
+              <DeleteEnquiry id={enquiry.id} name={enquiry.name} />
+            </section>
+          )}
         </aside>
       </div>
     </div>
