@@ -129,6 +129,26 @@ test("slugs are url-safe, deduplicated of punctuation, and bounded", () => {
   assert.ok(slugify("x".repeat(200)).length <= 70);
 });
 
+test("editing keeps the existing web address instead of regenerating it", () => {
+  // The edit form submits the current slug. Without it the slug is rebuilt from
+  // the title, so fixing a typo in a title would move the property's public URL
+  // and break every link already shared.
+  const renamed = validate(
+    { ...GOOD, slug: "e8-wilton-way-two-bed", title: "Two-bedroom flat on Wilton Way (updated)" },
+    []
+  );
+  assert.equal(renamed.ok, true);
+  if (!renamed.ok) return;
+  assert.equal(renamed.value.slug, "e8-wilton-way-two-bed");
+});
+
+test("a new property with no slug supplied derives one from area and title", () => {
+  const created = validate(GOOD, []);
+  assert.equal(created.ok, true);
+  if (!created.ok) return;
+  assert.equal(created.value.slug, "hackney-two-bedroom-flat-on-wilton-way");
+});
+
 test("a title with no usable characters still produces a slug", () => {
   // "***" would otherwise slugify to an empty string and violate NOT NULL.
   assert.equal(slugify("***"), "property");

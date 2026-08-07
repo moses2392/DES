@@ -27,8 +27,15 @@ export function PinPicker({
   const mapRef = useRef<LeafletMap | null>(null);
   const markerRef = useRef<LeafletMarker | null>(null);
 
-  const [lat, setLat] = useState<number | null>(latitude);
-  const [lon, setLon] = useState<number | null>(longitude);
+  // Held as strings, not numbers.
+  //
+  // Storing a number means round-tripping the field through Number() on every
+  // keystroke, which destroys what is being typed: "-" becomes NaN and renders
+  // as "NaN", and "51." becomes 51, so the decimal point vanishes and a
+  // coordinate can never be finished by hand. The form submits text regardless,
+  // and validate() parses it once on the server.
+  const [lat, setLat] = useState(latitude != null ? String(latitude) : "");
+  const [lon, setLon] = useState(longitude != null ? String(longitude) : "");
 
   useEffect(() => {
     let cancelled = false;
@@ -70,8 +77,8 @@ export function PinPicker({
           Number(clickedLat.toFixed(6)),
           Number(lng.toFixed(6)),
         ];
-        setLat(rounded[0]);
-        setLon(rounded[1]);
+        setLat(String(rounded[0]));
+        setLon(String(rounded[1]));
 
         if (markerRef.current) markerRef.current.setLatLng(rounded);
         else markerRef.current = L.marker(rounded, { icon }).addTo(map);
@@ -110,8 +117,8 @@ export function PinPicker({
           <input
             id="latitude"
             name="latitude"
-            value={lat ?? ""}
-            onChange={(e) => setLat(e.target.value === "" ? null : Number(e.target.value))}
+            value={lat}
+            onChange={(e) => setLat(e.target.value)}
             inputMode="decimal"
             className="field"
             placeholder="51.5453"
@@ -124,8 +131,8 @@ export function PinPicker({
           <input
             id="longitude"
             name="longitude"
-            value={lon ?? ""}
-            onChange={(e) => setLon(e.target.value === "" ? null : Number(e.target.value))}
+            value={lon}
+            onChange={(e) => setLon(e.target.value)}
             inputMode="decimal"
             className="field"
             placeholder="-0.0561"

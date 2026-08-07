@@ -95,8 +95,24 @@ export async function saveListing(_prev: FormState, formData: FormData): Promise
   };
 
   if (id) {
-    const { error } = await supabase.from("listings").update(row).eq("id", id);
+    // Selecting the row back is what proves the update happened. Postgres
+    // reports success for an UPDATE that matches nothing — so if another owner
+    // deleted this property while it was being edited, or a policy refused the
+    // write, this would otherwise redirect to "Saved." having saved nothing.
+    const { data: updated, error } = await supabase
+      .from("listings")
+      .update(row)
+      .eq("id", id)
+      .select("id")
+      .maybeSingle();
+
     if (error) return { error: describe(error), errors: slugConflict(error) };
+    if (!updated) {
+      return {
+        error: "That property no longer exists, or you are not allowed to change it.",
+      };
+    }
+
     revalidatePath("/admin/listings");
     revalidatePath("/");
     revalidatePath(`/property/${draft.slug}`);
@@ -176,16 +192,21 @@ export async function updateEnquiry(_prev: FormState, formData: FormData): Promi
   }
 
   const supabase = await sessionClient();
-  const { error } = await supabase
+  // Selected back on purpose: an UPDATE matching zero rows is a success in
+  // Postgres, so a deleted enquiry would report "Saved" and change nothing.
+  const { data: updated, error } = await supabase
     .from("enquiries")
     .update({
       status,
       assigned_to: assignedTo || null,
       viewing_at: viewingAt ? new Date(viewingAt).toISOString() : null,
     })
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .maybeSingle();
 
   if (error) return { error: "Could not save that change. Please try again." };
+  if (!updated) return { error: "That enquiry no longer exists." };
 
   // The status change is recorded as a note, so the history reads as one
   // sequence rather than a field that quietly changed at some point.

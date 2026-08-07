@@ -29,7 +29,17 @@ export function ListingForm({ listing }: { listing?: AdminListing }) {
 
   return (
     <form action={action} className="space-y-6">
-      {listing && <input type="hidden" name="id" value={listing.id} />}
+      {listing && (
+        <>
+          <input type="hidden" name="id" value={listing.id} />
+          {/* The existing web address travels with the edit. Without it the slug
+              is regenerated from the title, so correcting a typo in a title
+              would silently move the property's public URL and break every link
+              already shared — and could collide with another listing through a
+              field this form does not show. */}
+          <input type="hidden" name="slug" value={listing.slug} />
+        </>
+      )}
 
       <section className="card space-y-4 p-5">
         <h2 className="font-semibold">The property</h2>
